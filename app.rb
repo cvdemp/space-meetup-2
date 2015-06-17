@@ -5,6 +5,8 @@ require 'omniauth-github'
 
 require_relative 'config/application'
 
+enable :sessions
+
 Dir['app/**/*.rb'].each { |file| require_relative file }
 
 helpers do
@@ -30,9 +32,8 @@ def authenticate!
 end
 
 get '/' do
-  meetups =Meetup.order(:title)
-  erb :index, locals: {meetups: meetups}
-
+  meetups = Meetup.order(:title)
+  erb :index, locals: { meetups: meetups }
 end
 
 get '/auth/github/callback' do
@@ -57,8 +58,35 @@ get '/example_protected_page' do
 end
 
 get '/:id' do
-  meetup.id = params["id"]
-  require 'pry'
-  binding.pry
-  erb :show, locals: {meetup: meetup, id: params[:id]}
+  id = params["id"]
+  meetup = Meetup.find(id)
+  attendees = Attendee.where(meetup_id: id)
+
+  erb :show, locals: { meetup: meetup, attendees: attendees }
+end
+
+post '/' do
+  meetup = Meetup.create!(title: params["title"], description: params["description"], location: params["location"])
+  if signed_in?
+    flash[:notice] = "Meetup saved!"
+    redirect to("/#{meetup.id}")
+  else
+    flash[:notice] = "You must be signed in to do that!"
+    redirect '/'
+  end
+end
+
+post '/:id' do
+  #want to add current user to meetup using user metadata when they click the button
+  id = params["id"]
+  meetup = Meetup.find(id)
+  attendees = Attendee.where(meetup_id: id)
+  if signed_in?
+    flash[:notice] = "You're in!"
+    Attendee.create(meetup_id: meetup.id, user_id: current_user.id, owner: false)
+  else
+    flash[:notice] = "You must be signed in to do that!"
+    redirect '/'
+  end
+  erb :show, locals: { meetup: meetup, attendees: attendees }
 end
